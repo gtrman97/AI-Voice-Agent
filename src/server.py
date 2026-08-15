@@ -52,11 +52,13 @@ def health_check():
 
 @app.post("/twiml")
 def twiml_webhook(scenario: str = DEFAULT_SCENARIO):
-    ws_url = PUBLIC_SERVER_URL.replace("https://", "wss://") + f"/media-stream?scenario={scenario}"
+    ws_url = PUBLIC_SERVER_URL.replace("https://", "wss://") + "/media-stream"
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Connect>
-        <Stream url="{ws_url}" />
+        <Stream url="{ws_url}">
+            <Parameter name="scenario" value="{scenario}" />
+        </Stream>
     </Connect>
 </Response>"""
     return Response(content=twiml, media_type="application/xml")
@@ -104,13 +106,26 @@ async def media_stream(twilio_ws: WebSocket):
         while our bot is still speaking, stop our audio immediately)
     """
     await twilio_ws.accept()
+    print("Media stream connected. Waiting for start event...")
 
-    scenario_key = twilio_ws.query_params.get("scenario", DEFAULT_SCENARIO)
-    system_prompt = load_system_prompt(scenario_key)
-    print(f"Media stream connected. Scenario: {scenario_key}")
-
+    # Custom parameters (like our scenario key) only arrive in the 'start'
+    # event, after the WebSocket connects — Twilio doesn't support passing
+    # them via URL query strings. So we wait for that first before doing
+    # anything else, including opening the OpenAI connection.
     stream_sid = None
     call_sid = None
+    scenario_key = DEFAULT_SCENARIO
+
+    async for message in twilio_ws.iter_text():
+        data = json.loads(message)
+        if data.get("event") == "start":
+            stream_sid = data["start"]["streamSid"]
+            call_sid = data["start"]["callSid"]
+            scenario_key = data["start"].get("customParameters", {}).get("scenario", DEFAULT_SCENARIO)
+            print(f"Stream started. SID: {stream_sid}, Call SID: {call_sid}, Scenario: {scenario_key}")
+            break
+
+    system_prompt = load_system_prompt(scenario_key)
     transcript = []
 
     async with websockets.connect(
@@ -121,18 +136,12 @@ async def media_stream(twilio_ws: WebSocket):
         await send_session_update(openai_ws, system_prompt)
 
         async def twilio_to_openai():
-            nonlocal stream_sid, call_sid
             try:
                 async for message in twilio_ws.iter_text():
                     data = json.loads(message)
                     event = data.get("event")
 
-                    if event == "start":
-                        stream_sid = data["start"]["streamSid"]
-                        call_sid = data["start"]["callSid"]
-                        print(f"Stream started. SID: {stream_sid}, Call SID: {call_sid}")
-
-                    elif event == "media":
+                    if event == "media":
                         # Forward the caller's audio straight to OpenAI —
                         # already in the matching g711 ulaw format, no conversion needed.
                         await openai_ws.send(json.dumps({
