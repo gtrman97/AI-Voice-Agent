@@ -80,6 +80,7 @@ async def send_session_update(openai_ws):
                         "prefix_padding_ms": 300,
                         "silence_duration_ms": 500,
                     },
+                    "transcription": {"model": "whisper-1"},
                 },
                 "output": {
                     "format": {"type": "audio/pcmu"},
@@ -106,6 +107,8 @@ async def media_stream(twilio_ws: WebSocket):
     print("Media stream connected.")
 
     stream_sid = None
+    call_sid = None
+    transcript = []
 
     async with websockets.connect(
         REALTIME_URL,
@@ -115,7 +118,7 @@ async def media_stream(twilio_ws: WebSocket):
         await send_session_update(openai_ws)
 
         async def twilio_to_openai():
-            nonlocal stream_sid
+            nonlocal stream_sid, call_sid
             try:
                 async for message in twilio_ws.iter_text():
                     data = json.loads(message)
@@ -123,7 +126,8 @@ async def media_stream(twilio_ws: WebSocket):
 
                     if event == "start":
                         stream_sid = data["start"]["streamSid"]
-                        print(f"Stream started. SID: {stream_sid}")
+                        call_sid = data["start"]["callSid"]
+                        print(f"Stream started. SID: {stream_sid}, Call SID: {call_sid}")
 
                     elif event == "media":
                         # Forward the caller's audio straight to OpenAI —
@@ -186,6 +190,14 @@ async def media_stream(twilio_ws: WebSocket):
                                     "streamSid": stream_sid,
                                 }))
 
+                    elif event_type == "response.output_audio_transcript.done":
+                        # What OUR bot said
+                        transcript.append({"speaker": "bot", "text": data["transcript"]})
+
+                    elif event_type == "conversation.item.input_audio_transcription.completed":
+                        # What the business's agent (the other party) said
+                        transcript.append({"speaker": "agent", "text": data["transcript"]})
+
                     elif event_type == "error":
                         print(f"OpenAI error: {data}")
 
@@ -193,5 +205,13 @@ async def media_stream(twilio_ws: WebSocket):
                 print("OpenAI WebSocket closed.")
 
         await asyncio.gather(twilio_to_openai(), openai_to_twilio())
+
+    # Save the transcript once the call is fully finished
+    if call_sid and transcript:
+        os.makedirs("calls", exist_ok=True)
+        transcript_path = f"calls/{call_sid}_transcript.json"
+        with open(transcript_path, "w") as f:
+            json.dump(transcript, f, indent=2)
+        print(f"Transcript saved to: {transcript_path}")
 
     print("Media stream handler finished.")
