@@ -11,6 +11,7 @@ import json
 import os
 import base64
 import asyncio
+import yaml
 import websockets
 from dotenv import load_dotenv
 from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
@@ -25,13 +26,23 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-realtime-2.1"
 VOICE = "alloy"  # known-good with Twilio's G.711 stream; avoid fable/onyx/nova (documented compatibility bug)
 
-# Placeholder persona for this test phase — will be replaced by config/scenarios.yaml
-SYSTEM_PROMPT = (
-    "You are a patient calling a medical office. You want to know what time "
-    "the office opens today. Keep your responses brief and natural, like a real "
-    "phone conversation — not overly formal. Once you get a clear answer, thank "
-    "them briefly and let them know you don't need anything else."
-)
+# Which scenario to run — for now a fixed default; the orchestration script
+# will make this selectable per-call once we build it.
+ACTIVE_SCENARIO = "hours_inquiry"
+
+
+def load_system_prompt(scenario_key: str) -> str:
+    """Combine the shared base conversational behavior with a specific
+    scenario's goal, loaded from config/scenarios.yaml."""
+    with open("config/scenarios.yaml") as f:
+        config = yaml.safe_load(f)
+
+    base = config["base_instructions"]
+    scenario = config["scenarios"][scenario_key]
+    return f"{base}\n\nYour specific goal for this call:\n{scenario['goal']}"
+
+
+SYSTEM_PROMPT = load_system_prompt(ACTIVE_SCENARIO)
 
 
 @app.get("/")
@@ -161,10 +172,13 @@ async def media_stream(twilio_ws: WebSocket):
                         }))
 
                     elif event_type == "input_audio_buffer.speech_started":
-                        # Only a real interruption if our bot is actually mid-response right now.
+                        # OpenAI's server already auto-cancels any in-progress response
+                        # when it detects new speech — we don't need to (and shouldn't)
+                        # send response.cancel ourselves. We're only responsible for
+                        # telling Twilio to stop playing whatever's already queued,
+                        # since that's on our side of the bridge, not the server's.
                         if response_in_progress:
-                            print("Interruption detected — stopping current response.")
-                            await openai_ws.send(json.dumps({"type": "response.cancel"}))
+                            print("Interruption detected — clearing Twilio's audio queue.")
                             response_in_progress = False
                             if stream_sid:
                                 await twilio_ws.send_text(json.dumps({
