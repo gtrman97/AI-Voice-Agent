@@ -9,6 +9,9 @@ Run: uvicorn src.server:app --reload --port 8000
 """
 import json
 import os
+import base64
+import asyncio
+import websockets
 from dotenv import load_dotenv
 from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 
@@ -17,24 +20,28 @@ load_dotenv()
 app = FastAPI()
 
 PUBLIC_SERVER_URL = os.environ.get("PUBLIC_SERVER_URL", "")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+
+REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-realtime-2.1"
+VOICE = "alloy"  # known-good with Twilio's G.711 stream; avoid fable/onyx/nova (documented compatibility bug)
+
+# Placeholder persona for this test phase — will be replaced by config/scenarios.yaml
+SYSTEM_PROMPT = (
+    "You are a patient calling a medical office. You want to know what time "
+    "the office opens today. Keep your responses brief and natural, like a real "
+    "phone conversation — not overly formal. Once you get a clear answer, thank "
+    "them briefly and let them know you don't need anything else."
+)
 
 
 @app.get("/")
 def health_check():
-    """Simple route to confirm the server is up at all, via plain browser visit."""
     return {"status": "ok", "message": "Voice bot server is running"}
 
 
 @app.post("/twiml")
 def twiml_webhook():
-    """
-    Twilio POSTs here when the call connects. This now tells Twilio to open
-    a live Media Stream (raw audio WebSocket) to our /media-stream endpoint,
-    instead of just reading a static script.
-    """
-    # Convert https:// -> wss:// for the WebSocket URL Twilio needs
     ws_url = PUBLIC_SERVER_URL.replace("https://", "wss://") + "/media-stream"
-
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Connect>
@@ -44,33 +51,133 @@ def twiml_webhook():
     return Response(content=twiml, media_type="application/xml")
 
 
+async def send_session_update(openai_ws):
+    """Configure the OpenAI Realtime session to match Twilio's native audio
+    format (G.711 u-law, 8kHz) on both input and output — this is what lets
+    us relay audio directly with no transcoding step anywhere in the bridge."""
+    session_update = {
+        "type": "session.update",
+        "session": {
+            "type": "realtime",
+            "model": "gpt-realtime-2.1",
+            "output_modalities": ["audio"],
+            "audio": {
+                "input": {
+                    "format": {"type": "audio/pcmu"},
+                    "turn_detection": {
+                        "type": "server_vad",
+                        "prefix_padding_ms": 300,
+                        "silence_duration_ms": 500,
+                    },
+                },
+                "output": {
+                    "format": {"type": "audio/pcmu"},
+                    "voice": VOICE,
+                },
+            },
+            "instructions": SYSTEM_PROMPT,
+        },
+    }
+    await openai_ws.send(json.dumps(session_update))
+
+
 @app.websocket("/media-stream")
-async def media_stream(websocket: WebSocket):
+async def media_stream(twilio_ws: WebSocket):
     """
-    Twilio connects here once the call is live. It sends a stream of JSON
-    messages, each wrapping a base64-encoded audio frame. For this step we
-    just log what's arriving — no audio processing or AI yet.
+    Bridges audio between Twilio's Media Stream and OpenAI's Realtime API.
+    Two concurrent tasks run for the life of the call:
+      - twilio_to_openai: relays caller audio frames to OpenAI
+      - openai_to_twilio: relays generated speech back to Twilio, and
+        handles basic interruption (if the other party starts talking
+        while our bot is still speaking, stop our audio immediately)
     """
-    await websocket.accept()
-    frame_count = 0
+    await twilio_ws.accept()
     print("Media stream connected.")
 
-    try:
-        while True:
-            raw_message = await websocket.receive_text()
-            data = json.loads(raw_message)
-            event = data.get("event")
+    stream_sid = None
 
-            if event == "connected":
-                print("Twilio: stream connected event received.")
-            elif event == "start":
-                print(f"Twilio: stream started. Stream SID: {data['start']['streamSid']}")
-            elif event == "media":
-                frame_count += 1
-                if frame_count % 50 == 0:  # log every 50th frame, not every single one
-                    print(f"Received {frame_count} audio frames so far.")
-            elif event == "stop":
-                print(f"Twilio: stream stopped. Total frames received: {frame_count}")
+    async with websockets.connect(
+        REALTIME_URL,
+        extra_headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+    ) as openai_ws:
 
-    except WebSocketDisconnect:
-        print(f"Media stream disconnected. Total frames received: {frame_count}")
+        await send_session_update(openai_ws)
+
+        async def twilio_to_openai():
+            nonlocal stream_sid
+            try:
+                async for message in twilio_ws.iter_text():
+                    data = json.loads(message)
+                    event = data.get("event")
+
+                    if event == "start":
+                        stream_sid = data["start"]["streamSid"]
+                        print(f"Stream started. SID: {stream_sid}")
+
+                    elif event == "media":
+                        # Forward the caller's audio straight to OpenAI —
+                        # already in the matching g711 ulaw format, no conversion needed.
+                        await openai_ws.send(json.dumps({
+                            "type": "input_audio_buffer.append",
+                            "audio": data["media"]["payload"],
+                        }))
+
+                    elif event == "stop":
+                        print("Twilio stream stopped.")
+                        break
+
+            except WebSocketDisconnect:
+                print("Twilio WebSocket disconnected.")
+            finally:
+                # Explicitly close our end of the OpenAI connection so nothing
+                # lingers as an open background task after the call ends.
+                await openai_ws.close()
+
+        response_in_progress = False
+
+        async def openai_to_twilio():
+            nonlocal response_in_progress
+            audio_chunks_sent = 0
+            try:
+                async for message in openai_ws:
+                    data = json.loads(message)
+                    event_type = data.get("type")
+
+                    if event_type == "response.created":
+                        response_in_progress = True
+
+                    elif event_type == "response.done":
+                        response_in_progress = False
+                        print(f"Response finished. Audio chunks sent to Twilio: {audio_chunks_sent}")
+                        audio_chunks_sent = 0
+
+                    elif event_type == "response.output_audio.delta" and stream_sid:
+                        audio_chunks_sent += 1
+                        # Relay generated speech straight back to Twilio, same format, no conversion.
+                        await twilio_ws.send_text(json.dumps({
+                            "event": "media",
+                            "streamSid": stream_sid,
+                            "media": {"payload": data["delta"]},
+                        }))
+
+                    elif event_type == "input_audio_buffer.speech_started":
+                        # Only a real interruption if our bot is actually mid-response right now.
+                        if response_in_progress:
+                            print("Interruption detected — stopping current response.")
+                            await openai_ws.send(json.dumps({"type": "response.cancel"}))
+                            response_in_progress = False
+                            if stream_sid:
+                                await twilio_ws.send_text(json.dumps({
+                                    "event": "clear",
+                                    "streamSid": stream_sid,
+                                }))
+
+                    elif event_type == "error":
+                        print(f"OpenAI error: {data}")
+
+            except websockets.exceptions.ConnectionClosed:
+                print("OpenAI WebSocket closed.")
+
+        await asyncio.gather(twilio_to_openai(), openai_to_twilio())
+
+    print("Media stream handler finished.")
