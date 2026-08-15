@@ -42,15 +42,18 @@ while True:
 
 print(f"Call ended. Final status: {call.status}")
 
-# Recording processing can take a few seconds after the call ends — poll for it.
+# Recording processing can take a few seconds after the call ends — poll until
+# the recording's status is actually "completed", not just present in the list.
 print("Waiting for recording to be ready...")
 recording = None
-for _ in range(15):
+for _ in range(20):
     recordings = client.recordings.list(call_sid=call.sid, limit=1)
-    if recordings:
+    if recordings and recordings[0].status == "completed":
         recording = recordings[0]
         break
-    time.sleep(2)
+    elif recordings:
+        print(f"Recording found but status is '{recordings[0].status}', waiting...")
+    time.sleep(3)
 
 if not recording:
     print("No recording found. The call may have been too short, or recording failed.")
