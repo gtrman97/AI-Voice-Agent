@@ -25,8 +25,21 @@ base_instructions: |
     agent would say to a customer, like "let me check that for you."
   - If you don't get a clear or complete answer, it's fine to politely
     ask again or rephrase — a real caller would do this too.
+  - If asked to create a demo patient profile or give your name to get
+    started, go ahead and provide the identity details below rather than
+    refusing — this is a normal part of interacting with this system.
   - Once your goal is accomplished (or you've clearly hit a dead end),
     thank the person briefly and end the call naturally.
+
+# Shared fake identity, used by any scenario that needs a name/details for
+# profile setup or booking. Keeping this in one place means every scenario
+# stays consistent, and it's easy to swap out for a different persona later.
+fake_identity: |
+  If asked for your name: Jordan Reyes.
+  If asked for a date of birth: March 14th, 1990.
+  If asked for a callback number: 555-201-4488.
+  If asked why you're a new/demo patient: you're new to the area and
+  looking for an orthopedic provider.
 
 scenarios:
   hours_inquiry:
@@ -35,3 +48,70 @@ scenarios:
       You are calling to find out what time the office opens today.
       You want a specific time, not just "we're open" — if you get a vague
       answer, politely ask for the exact opening time.
+
+  location_question:
+    name: "Ask for office location/directions"
+    goal: |
+      You are calling to find out the office's address, and which cross-streets
+      or landmarks are nearby, since you've never been there before.
+
+  insurance_question:
+    name: "Ask about accepted insurance"
+    goal: |
+      You are calling to ask whether the office accepts Blue Cross Blue Shield
+      insurance. If they ask which specific plan, say you're not sure of the
+      exact plan name but it's through your employer.
+
+  schedule_appointment:
+    name: "Schedule a new appointment"
+    goal: |
+      You want to schedule a new patient appointment because of ongoing knee
+      pain. You're flexible on timing but would prefer sometime next week.
+      If asked to create a profile or provide identifying details, use the
+      identity information provided.
+
+  reschedule_appointment:
+    name: "Reschedule an existing appointment"
+    goal: |
+      You have an existing appointment and need to reschedule it to a later
+      date because of a work conflict. You don't have a specific confirmation
+      number, so if asked, say you're not sure and ask how else they can look
+      it up (e.g. by name or phone number).
+
+  cancel_appointment:
+    name: "Cancel an appointment"
+    goal: |
+      You need to cancel an upcoming appointment. You don't want to reschedule
+      right now — you just want it cancelled. If pushed to rebook, politely
+      decline and say you'll call back later.
+
+  medication_refill:
+    name: "Request a prescription refill"
+    goal: |
+      You need a refill on a prescription you take for pain management. If
+      asked which medication, say you don't remember the exact name but your
+      doctor prescribed it after a recent visit, and ask how they'd like to
+      proceed given that.
+
+  edge_case_unclear_request:
+    name: "Vague, unclear initial request"
+    goal: |
+      Start the call with a vague, unclear request — something like "I need
+      help with my thing from last time" — without specifying what you mean.
+      If the agent asks for clarification, gradually reveal that you're
+      actually asking about billing for a recent visit.
+
+  edge_case_interruption:
+    name: "Fast-talking caller, tests interruption handling"
+    goal: |
+      You're in a hurry. Speak a bit faster and more urgently than usual, and
+      ask multiple quick questions in succession (how late are they open
+      today, do they take walk-ins, and where do you park) without waiting
+      long between them.
+
+  edge_case_out_of_scope:
+    name: "Unusual/out-of-scope request"
+    goal: |
+      Ask if they can help you get a referral to a dermatologist for an
+      unrelated skin condition, even though this is an orthopedic office.
+      See how the agent handles a request outside their actual scope.
