@@ -1,15 +1,13 @@
 """
-Step 4b (final check): Twilio places a call and fetches its instructions
-from OUR server (via ngrok), instead of static inline TwiML.
-
-Proves the full chain: Twilio -> ngrok -> our FastAPI server -> TwiML -> back to Twilio.
-
-Before running: make sure your ngrok URL is set in .env as PUBLIC_SERVER_URL
-(e.g. PUBLIC_SERVER_URL=https://hypnotist-verse-hacking.ngrok-free.dev)
+Step 4d verification: places a call with recording enabled, waits for the
+call to finish, then downloads the recording as an MP3 so we can actually
+listen to how the conversation sounded.
 
 Run: python src/test_call_webhook.py
 """
 import os
+import time
+import requests
 from dotenv import load_dotenv
 from twilio.rest import Client
 
@@ -28,9 +26,41 @@ webhook_url = f"{SERVER_URL}/twiml"
 call = client.calls.create(
     to=TO_NUMBER,
     from_=FROM_NUMBER,
-    url=webhook_url,   # Twilio will POST here to fetch TwiML, instead of using inline TwiML
+    url=webhook_url,
+    record=True,  # Twilio records the full call natively — no custom audio capture needed
 )
 
 print(f"Call placed. SID: {call.sid}")
-print(f"Status: {call.status}")
-print(f"Twilio will fetch instructions from: {webhook_url}")
+print("Waiting for call to complete...")
+
+# Poll call status until it's finished
+while True:
+    call = call.fetch()
+    if call.status in ("completed", "failed", "busy", "no-answer", "canceled"):
+        break
+    time.sleep(3)
+
+print(f"Call ended. Final status: {call.status}")
+
+# Recording processing can take a few seconds after the call ends — poll for it.
+print("Waiting for recording to be ready...")
+recording = None
+for _ in range(15):
+    recordings = client.recordings.list(call_sid=call.sid, limit=1)
+    if recordings:
+        recording = recordings[0]
+        break
+    time.sleep(2)
+
+if not recording:
+    print("No recording found. The call may have been too short, or recording failed.")
+else:
+    os.makedirs("calls", exist_ok=True)
+    mp3_url = f"https://api.twilio.com{recording.uri.replace('.json', '.mp3')}"
+    response = requests.get(mp3_url, auth=(ACCOUNT_SID, AUTH_TOKEN))
+
+    filename = f"calls/{call.sid}.mp3"
+    with open(filename, "wb") as f:
+        f.write(response.content)
+
+    print(f"Recording saved to: {filename}")
