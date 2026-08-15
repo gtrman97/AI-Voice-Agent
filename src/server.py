@@ -1,8 +1,6 @@
 """
-Step 4b: Minimal FastAPI server — proves Twilio can reach OUR server
-(via ngrok) and get back dynamically generated TwiML.
-
-No WebSocket, no OpenAI yet — just a single HTTP route.
+FastAPI server: bridges Twilio Media Streams with OpenAI's Realtime API to
+hold live phone conversations, using scenario configs from config/scenarios.yaml.
 
 Run: uvicorn src.server:app --reload --port 8000
 (then separately: ngrok http 8000)
@@ -26,24 +24,26 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-realtime-2.1"
 VOICE = "alloy"  # known-good with Twilio's G.711 stream; avoid fable/onyx/nova (documented compatibility bug)
 
-# Which scenario to run — for now a fixed default; the orchestration script
-# will make this selectable per-call once we build it.
-ACTIVE_SCENARIO = "hours_inquiry"
+# Default scenario if none is specified in the request — used mainly for
+# quick manual testing. The orchestration script will specify a scenario
+# explicitly per call via a query parameter.
+DEFAULT_SCENARIO = "hours_inquiry"
 
 
 def load_system_prompt(scenario_key: str) -> str:
-    """Combine the shared base conversational behavior with a specific
-    scenario's goal, loaded from config/scenarios.yaml."""
+    """Combine the shared base conversational behavior, shared fake identity,
+    and a specific scenario's goal, loaded from config/scenarios.yaml."""
     with open("config/scenarios.yaml") as f:
         config = yaml.safe_load(f)
 
     base = config["base_instructions"]
+    identity = config["fake_identity"]
     scenario = config["scenarios"][scenario_key]
-    return f"{base}\n\nYour specific goal for this call:\n{scenario['goal']}"
-
-
-SYSTEM_PROMPT = load_system_prompt(ACTIVE_SCENARIO)
-
+    return (
+        f"{base}\n\n"
+        f"Your identity details, if needed:\n{identity}\n\n"
+        f"Your specific goal for this call:\n{scenario['goal']}"
+    )
 
 @app.get("/")
 def health_check():
@@ -51,8 +51,8 @@ def health_check():
 
 
 @app.post("/twiml")
-def twiml_webhook():
-    ws_url = PUBLIC_SERVER_URL.replace("https://", "wss://") + "/media-stream"
+def twiml_webhook(scenario: str = DEFAULT_SCENARIO):
+    ws_url = PUBLIC_SERVER_URL.replace("https://", "wss://") + f"/media-stream?scenario={scenario}"
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Connect>
@@ -62,7 +62,7 @@ def twiml_webhook():
     return Response(content=twiml, media_type="application/xml")
 
 
-async def send_session_update(openai_ws):
+async def send_session_update(openai_ws, system_prompt: str):
     """Configure the OpenAI Realtime session to match Twilio's native audio
     format (G.711 u-law, 8kHz) on both input and output — this is what lets
     us relay audio directly with no transcoding step anywhere in the bridge."""
@@ -87,7 +87,7 @@ async def send_session_update(openai_ws):
                     "voice": VOICE,
                 },
             },
-            "instructions": SYSTEM_PROMPT,
+            "instructions": system_prompt,
         },
     }
     await openai_ws.send(json.dumps(session_update))
@@ -104,7 +104,10 @@ async def media_stream(twilio_ws: WebSocket):
         while our bot is still speaking, stop our audio immediately)
     """
     await twilio_ws.accept()
-    print("Media stream connected.")
+
+    scenario_key = twilio_ws.query_params.get("scenario", DEFAULT_SCENARIO)
+    system_prompt = load_system_prompt(scenario_key)
+    print(f"Media stream connected. Scenario: {scenario_key}")
 
     stream_sid = None
     call_sid = None
@@ -115,7 +118,7 @@ async def media_stream(twilio_ws: WebSocket):
         extra_headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
     ) as openai_ws:
 
-        await send_session_update(openai_ws)
+        await send_session_update(openai_ws, system_prompt)
 
         async def twilio_to_openai():
             nonlocal stream_sid, call_sid
@@ -209,7 +212,7 @@ async def media_stream(twilio_ws: WebSocket):
     # Save the transcript once the call is fully finished
     if call_sid and transcript:
         os.makedirs("calls", exist_ok=True)
-        transcript_path = f"calls/{call_sid}_transcript.json"
+        transcript_path = f"calls/{call_sid}_{scenario_key}_transcript.json"
         with open(transcript_path, "w") as f:
             json.dump(transcript, f, indent=2)
         print(f"Transcript saved to: {transcript_path}")
