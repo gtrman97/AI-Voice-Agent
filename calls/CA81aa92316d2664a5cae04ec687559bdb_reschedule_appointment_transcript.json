@@ -1,0 +1,86 @@
+[
+  {
+    "speaker": "agent",
+    "text": "This call may be recorded for quality and training purposes."
+  },
+  {
+    "speaker": "agent",
+    "text": "Para Espa\u00f1ol, oprima el 2."
+  },
+  {
+    "speaker": "agent",
+    "text": "Thank you for calling Pivot Point Orthopedics."
+  },
+  {
+    "speaker": "agent",
+    "text": "Would you like to create a demo patient profile? I just need your first and last name to get started."
+  },
+  {
+    "speaker": "bot",
+    "text": "Jordan Reyes."
+  },
+  {
+    "speaker": "agent",
+    "text": "Your patient profile is set up and your date of birth is July 4, 2000 for demo purposes."
+  },
+  {
+    "speaker": "agent",
+    "text": "How may I help you today?"
+  },
+  {
+    "speaker": "bot",
+    "text": "I need to reschedule an existing appointment to a later date because of a work conflict. I don\u2019t have a confirmation number, so could you look it up by my name or phone number?"
+  },
+  {
+    "speaker": "agent",
+    "text": "I found your upcoming appointment. It's scheduled for Monday, August 17th at 1030 a.m. with ABRICOR at Nashville, 220 Athens Way. Is this the appointment you want to reschedule?"
+  },
+  {
+    "speaker": "bot",
+    "text": "Yes, that\u2019s the one. I need to move it to a later date, please. If you have something later that same week or the week after, that would be great."
+  },
+  {
+    "speaker": "agent",
+    "text": "I have Wednesday, August 19th at 9 a.m. or 9.45 a.m."
+  },
+  {
+    "speaker": "agent",
+    "text": "When either of those work or do you want to look at the following week as well?"
+  },
+  {
+    "speaker": "bot",
+    "text": "Yes, 9:45 a.m. on Wednesday works. Please move it to that time. Thanks for the help."
+  },
+  {
+    "speaker": "agent",
+    "text": "Just to confirm, you'd like to move your appointment to Wednesday, August 19th at 9.45 a.m. with ABRICOR at Nashville? Is that correct? And could you confirm the reason for rescheduling is a work conflict?"
+  },
+  {
+    "speaker": "bot",
+    "text": "That\u2019s correct, Wednesday at 9:45 works, and the reason is a work conflict. Thank you."
+  },
+  {
+    "speaker": "bot",
+    "text": "Yes, a text message would be great. Thanks again for rescheduling it."
+  },
+  {
+    "speaker": "agent",
+    "text": "Your appointment has been rescheduled to Wednesday, August 19th at 945 a.m. with A. Bricker at Nashville. Would you like a text message with your new appointment details?"
+  },
+  {
+    "speaker": "agent",
+    "text": "You're all set. Your appointment is confirmed and you'll get a text with the details. Let me know if you need anything else."
+  },
+  {
+    "speaker": "bot",
+    "text": "Perfect, that\u2019s all I needed. Thanks for your help\u2014have a great day."
+  },
+  {
+    "speaker": "bot",
+    "text": "You too, take care."
+  },
+  {
+    "speaker": "agent",
+    "text": "Glad I could help. Have a great day."
+  }
+]

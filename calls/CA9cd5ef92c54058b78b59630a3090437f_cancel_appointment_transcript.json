@@ -1,0 +1,58 @@
+[
+  {
+    "speaker": "agent",
+    "text": "This call may be recorded for quality and training purposes."
+  },
+  {
+    "speaker": "agent",
+    "text": "Para Espa\u00f1ol, oprima el 2."
+  },
+  {
+    "speaker": "agent",
+    "text": "Thank you for calling Pivot Point Orthopedics."
+  },
+  {
+    "speaker": "agent",
+    "text": "Would you like to create a demo patient profile? I just need your first and last name."
+  },
+  {
+    "speaker": "bot",
+    "text": "Jordan Reyes. I'm actually calling to cancel an upcoming appointment, and I don't want to reschedule right now. If you need a profile to look it up, that's fine."
+  },
+  {
+    "speaker": "agent",
+    "text": "How may I help you today?"
+  },
+  {
+    "speaker": "agent",
+    "text": "Your patient profile has been created and your date of birth is July 4, 2000 for demo purposes."
+  },
+  {
+    "speaker": "bot",
+    "text": "I\u2019d like to cancel my upcoming appointment, please. I\u2019m not looking to reschedule right now, just cancel it. If you need anything else to find it, let me know."
+  },
+  {
+    "speaker": "agent",
+    "text": "I found your upcoming appointment with Abraker on Wednesday, August 19th. Can you share a brief reason for canceling?"
+  },
+  {
+    "speaker": "bot",
+    "text": "I\u2019m not able to make that date anymore, and my schedule\u2019s up in the air. I\u2019d rather just cancel it for now."
+  },
+  {
+    "speaker": "agent",
+    "text": "Your appointment on August 19th with ABRCR has been cancelled. Is there anything else I can help you with today?"
+  },
+  {
+    "speaker": "bot",
+    "text": "No, that\u2019s all I needed. Thanks for your help. Have a good one."
+  },
+  {
+    "speaker": "bot",
+    "text": "Thanks, take care."
+  },
+  {
+    "speaker": "agent",
+    "text": "You too. Take care."
+  }
+]

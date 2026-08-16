@@ -1,0 +1,54 @@
+[
+  {
+    "speaker": "agent",
+    "text": "This call may be recorded for quality and training purposes."
+  },
+  {
+    "speaker": "agent",
+    "text": "Para Espa\u00f1ol, oprima el 2."
+  },
+  {
+    "speaker": "agent",
+    "text": "Thank you for calling Pivot Point Orthopaedics."
+  },
+  {
+    "speaker": "bot",
+    "text": "Jordan Reyes."
+  },
+  {
+    "speaker": "agent",
+    "text": "Would you like to create a demo patient profile? I just need your first and last name to get started."
+  },
+  {
+    "speaker": "agent",
+    "text": "Your patient profile is set up and your date of birth is July 4, 2000 for demo purposes. How may I help you today?"
+  },
+  {
+    "speaker": "bot",
+    "text": "I\u2019m looking to schedule a new patient appointment for ongoing knee pain. I\u2019m flexible, but I\u2019d prefer something next week if you have any openings."
+  },
+  {
+    "speaker": "agent",
+    "text": "We have an opening for a new patient consultation on Monday, August 17th at 10.30 a.m. with ABRICOR. Would you like to book this slot or would you prefer to hear other options later in the week?"
+  },
+  {
+    "speaker": "bot",
+    "text": "That time works for me. Please book the Monday, August 17th slot at 10:30 AM with A. Bricker. Thank you."
+  },
+  {
+    "speaker": "bot",
+    "text": "That\u2019s everything I needed. Thanks for getting me scheduled. I\u2019ll see you Monday."
+  },
+  {
+    "speaker": "agent",
+    "text": "Your appointment is confirmed for Monday, August 17th at 10.30 a.m. with Dr. Bricker at Pivot Point Orthopedics. Please bring your photo ID, insurance card, a list of current medications, and any imaging discs you have. Is there anything else I can help you with today?"
+  },
+  {
+    "speaker": "bot",
+    "text": "Thanks, you too. Take care."
+  },
+  {
+    "speaker": "agent",
+    "text": "You're all set. We look forward to seeing you Monday. Have a great day!"
+  }
+]
